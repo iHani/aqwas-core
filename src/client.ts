@@ -135,6 +135,10 @@ export class AqwasClient {
       }
 
       case "error": {
+        if (msg.code === "WRITE_DENIED") {
+          this.store.rollback()
+          this.pendingUpdates = []
+        }
         this.emit("error", msg.code, msg.message)
         break
       }

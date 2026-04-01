@@ -25,18 +25,17 @@ await build({
   },
   package: {
     name: "@aqwas/core",
-    version: "0.1.0",
+    version: "0.1.1",
     description:
       "Vanilla TypeScript client for Aqwas — distributed real-time state over CRDT (Yjs). Works in the browser, Node.js, Deno, and Bun.",
     license: "MIT",
-    author: "Aqwas",
-    homepage: "https://github.com/aqwas/aqwas",
+    author: "Hani Yahya",
+    homepage: "https://github.com/iHani/aqwas-core",
     repository: {
       type: "git",
-      url: "https://github.com/aqwas/aqwas.git",
-      directory: "packages/core",
+      url: "https://github.com/iHani/aqwas-core.git",
     },
-    bugs: { url: "https://github.com/aqwas/aqwas/issues" },
+    bugs: { url: "https://github.com/iHani/aqwas-core/issues" },
     keywords: [
       "crdt",
       "yjs",

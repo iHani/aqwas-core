@@ -1,6 +1,6 @@
 # @aqwas/core
 
-Vanilla TypeScript client for [Aqwas](https://github.com/aqwas/aqwas) — a distributed, real-time state service built on CRDT. Multiple clients, zero conflicts, offline-first.
+Vanilla TypeScript client for [Aqwas](https://github.com/iHani/aqwas-core) — a distributed, real-time state service built on CRDT. Multiple clients, zero conflicts, offline-first.
 
 Works in **Node.js**, **browsers**, **Deno**, and **Bun**.
 

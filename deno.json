@@ -1,0 +1,17 @@
+{
+  "name": "@aqwas/core",
+  "version": "0.1.0",
+  "exports": "./src/index.ts",
+  "tasks": {
+    "build:browser": "deno run --allow-read --allow-write --allow-net --allow-env --allow-run build.ts",
+    "build:npm": "deno run --allow-read --allow-write --allow-net --allow-env --allow-run build_npm.ts",
+    "test": "deno test --allow-net --allow-env tests/",
+    "test:unit": "deno test --allow-env tests/store_test.ts",
+    "test:integration": "deno test --allow-net --allow-env tests/client_test.ts",
+    "fmt": "deno fmt src/ tests/",
+    "lint": "deno lint src/ tests/"
+  },
+  "imports": {
+    "yjs": "https://esm.sh/yjs@13.6.0"
+  }
+}

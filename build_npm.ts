@@ -1,12 +1,15 @@
 // Builds @aqwas/core for npm publishing using dnt.
 // Outputs dual ESM+CJS with TypeScript declarations to ./dist/
 // Usage: deno task build:npm
-import { build, emptyDir } from "jsr:@deno/dnt@^0.41.3"
-import { dirname, fromFileUrl } from "https://deno.land/std@0.220.0/path/mod.ts"
+import { build, emptyDir } from "jsr:@deno/dnt@^0.41.3";
+import {
+  dirname,
+  fromFileUrl,
+} from "https://deno.land/std@0.220.0/path/mod.ts";
 
-const root = dirname(fromFileUrl(import.meta.url))
+const root = dirname(fromFileUrl(import.meta.url));
 
-await emptyDir(`${root}/dist`)
+await emptyDir(`${root}/dist`);
 
 await build({
   entryPoints: [`${root}/src/index.ts`],
@@ -61,7 +64,7 @@ await build({
   // Tests use Deno-only APIs (Deno.env); run them with `deno task test`
   test: false,
   postBuild() {
-    Deno.copyFileSync(`${root}/README.md`, `${root}/dist/README.md`)
+    Deno.copyFileSync(`${root}/README.md`, `${root}/dist/README.md`);
   },
   compilerOptions: {
     lib: ["ES2022", "DOM"],
@@ -69,8 +72,8 @@ await build({
   },
   filterDiagnostic(d) {
     // Ignore diagnostics from test files (they use Deno-only APIs)
-    return !d.file?.fileName.includes("_test.ts")
+    return !d.file?.fileName.includes("_test.ts");
   },
-})
+});
 
-console.log("npm build complete → dist/")
+console.log("npm build complete → dist/");

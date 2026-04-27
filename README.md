@@ -1,10 +1,9 @@
 # @aqwas/core
 
 Vanilla TypeScript client for [Aqwas](https://aqwas.com) — a distributed,
-real-time state service built on CRDT. Multiple clients, zero conflicts,
-offline-first.
+real-time state service. Multiple clients, instant local writes, automatic sync.
 
-Works in **Node.js**, **browsers**, **Deno**, and **Bun**.
+Works in **Node.js**, **browsers**, **Deno**, and **Bun**. No dependencies.
 
 ## Install
 
@@ -22,23 +21,23 @@ bun add @aqwas/core
 import { AqwasClient } from "jsr:@aqwas/core";
 ```
 
-## Quick Start
+## Quick start
 
 ```ts
 import { AqwasClient } from "@aqwas/core";
 
 const client = new AqwasClient({
-  url: "ws://localhost:3000/ws",
+  url: "wss://aqwas-server.fly.dev/ws",
   storeId: "my-app/room-1",
 });
 
 await client.connect();
 
-// Write state — applies locally instantly, syncs to server async
+// Write — applies locally instantly, syncs to server in the background
 client.set("score", 100);
 client.set("player", { name: "Alice", level: 5 });
 
-// Read state
+// Read
 console.log(client.get("score")); // 100
 console.log(client.getAll()); // { score: 100, player: { ... } }
 
@@ -49,29 +48,30 @@ const unsub = client.subscribe("score", (value, oldValue) => {
 
 // Listen to any change (local or from another client)
 client.on("change", (key, value, oldValue) => {
-  console.log(key, "changed");
+  console.log(key, "changed to", value);
 });
 
 unsub();
 client.disconnect();
 ```
 
-## How It Works
+## How it works
 
-**Optimistic updates.** `set()` writes to the local [Yjs](https://yjs.dev) CRDT
-document immediately — the UI never waits for a server round-trip. The binary
-update is sent to the server in the background.
+**Last-write-wins.** Each `set(key, value)` sends a JSON message to the server,
+which broadcasts it to every other connected client. The most recent write for a
+key wins. This is the right model for 99% of real-time state: game state,
+presence, AI agent memory, dashboards.
 
-**Automatic conflict resolution.** Concurrent writes from multiple clients are
-merged by the CRDT. There are no "resolve conflict" dialogs and no
-last-write-wins data loss. All clients converge to the same state.
+**Optimistic updates.** `set()` applies to the local store immediately — the UI
+never waits for a server round-trip. Other clients receive the update
+asynchronously via broadcast.
 
-**Offline buffering.** Writes made while disconnected are queued. On reconnect,
-all pending updates are merged into a single CRDT update and flushed — no data
-is lost.
+**Offline buffering.** Writes made while disconnected are queued as plain
+messages. On reconnect they are flushed to the server in order — no data is
+lost.
 
 **Automatic reconnect.** Exponential backoff with configurable limits.
-`connect()` resolves again after each successful reconnect.
+`connect()` resolves again after each successful reconnect + resync.
 
 ## API
 
@@ -79,7 +79,7 @@ is lost.
 
 ```ts
 const client = new AqwasClient({
-  url: "ws://your-server/ws",
+  url: "wss://your-server/ws",
   storeId: "app/room-42",
   token: "aq_live_...", // optional auth token
   persist: true, // persist store to DB (server default if omitted)
@@ -101,7 +101,7 @@ const client = new AqwasClient({
 | `token`     | `string`          | Auth token for permission-scoped access                         |
 | `persist`   | `boolean`         | Whether the server persists this store to the database          |
 | `ttl`       | `string`          | How long the server keeps the store alive after last connection |
-| `exclude`   | `string[]`        | Keys that are written locally but never sent to the server      |
+| `exclude`   | `string[]`        | Keys written locally but never sent to the server               |
 | `reconnect` | `ReconnectConfig` | Backoff settings for automatic reconnection                     |
 
 ---
@@ -125,9 +125,8 @@ Closes the connection permanently. No further reconnects.
 
 ### `client.set(key, value): void`
 
-Writes `value` for `key`. Applies to the local CRDT immediately; syncs to the
-server asynchronously. If the client is offline, the update is buffered until
-reconnect.
+Writes `value` for `key`. Applies locally immediately; syncs to the server
+asynchronously. If the client is offline, the write is buffered until reconnect.
 
 ```ts
 client.set("position", { x: 10, y: 20 });
@@ -159,9 +158,7 @@ incoming server updates. Returns an unsubscribe function.
 
 ```ts
 const unsub = client.subscribe("cursor", (pos) => renderCursor(pos));
-
-// stop listening
-unsub();
+unsub(); // stop listening
 ```
 
 ### `client.on(event, callback): () => void`
@@ -171,6 +168,7 @@ Listens for lifecycle events. Returns an unsubscribe function.
 ```ts
 client.on("connect", () => console.log("synced"));
 client.on("disconnect", () => showOfflineBanner());
+client.on("sync", (state) => console.log("full state", state));
 client.on("change", (key, value, oldValue) => console.log(key, value));
 client.on("error", (code, message) => console.error(code, message));
 client.on("destroyed", (reason) => console.warn("store destroyed:", reason));

@@ -28,9 +28,9 @@ await build({
   },
   package: {
     name: "@aqwas/core",
-    version: "0.1.1",
+    version: "0.2.0",
     description:
-      "Vanilla TypeScript client for Aqwas — distributed real-time state over CRDT (Yjs). Works in the browser, Node.js, Deno, and Bun.",
+      "Vanilla TypeScript client for Aqwas — distributed real-time state. Last-write-wins, optimistic updates, offline buffering. Works in the browser, Node.js, Deno, and Bun. No dependencies.",
     license: "MIT",
     author: "Hani Yahya",
     homepage: "https://github.com/iHani/aqwas-core",
@@ -40,19 +40,17 @@ await build({
     },
     bugs: { url: "https://github.com/iHani/aqwas-core/issues" },
     keywords: [
-      "crdt",
-      "yjs",
       "realtime",
       "state",
       "websocket",
       "sync",
       "distributed",
+      "lww",
+      "last-write-wins",
+      "ai-agents",
       "offline-first",
     ],
     engines: { node: ">=18" },
-    dependencies: {
-      yjs: "^13.6.0",
-    },
     devDependencies: {
       ws: "^8.18.0",
       "@types/ws": "^8.5.0",

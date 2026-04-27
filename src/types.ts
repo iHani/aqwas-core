@@ -47,21 +47,62 @@ export type EventCallback<E extends ClientEvent> = E extends "connect"
   : E extends "destroyed" ? (reason: string) => void
   : never;
 
-// ---- Server → Client messages ----
+// ---- Client → Server messages ----
 
-export interface SyncStateMessage {
-  type: "sync-state";
+export interface JoinMessage {
+  type: "join";
   storeId: string;
-  seq: number;
-  state: number[];
-  stateVector: number[];
+  token?: string;
+  ttl?: string;
+  persist?: boolean;
+  exclude?: string[];
 }
 
-export interface StateMessage {
-  type: "state";
+export interface SetMessage {
+  type: "set";
+  storeId: string;
+  key: string;
+  value: unknown;
+}
+
+export interface DeleteMessage {
+  type: "delete";
+  storeId: string;
+  key: string;
+}
+
+export interface ResyncMessage {
+  type: "sync";
+  storeId: string;
+}
+
+export interface PingMessage {
+  type: "ping";
+}
+
+// ---- Server → Client messages ----
+
+export interface SyncMessage {
+  type: "sync";
   storeId: string;
   seq: number;
-  update: number[];
+  state: Record<string, unknown>;
+  instanceId?: string;
+}
+
+export interface SetBroadcast {
+  type: "set";
+  storeId: string;
+  seq: number;
+  key: string;
+  value: unknown;
+}
+
+export interface DeleteBroadcast {
+  type: "delete";
+  storeId: string;
+  seq: number;
+  key: string;
 }
 
 export interface ErrorMessage {
@@ -78,8 +119,9 @@ export interface DestroyedMessage {
 }
 
 export type ServerMessage =
-  | SyncStateMessage
-  | StateMessage
+  | SyncMessage
+  | SetBroadcast
+  | DeleteBroadcast
   | ErrorMessage
   | DestroyedMessage
   | { type: "pong" };

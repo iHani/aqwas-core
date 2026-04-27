@@ -1,6 +1,6 @@
 {
   "name": "@aqwas/core",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "exports": "./src/index.ts",
   "tasks": {
     "build:browser": "deno run --allow-read --allow-write --allow-net --allow-env --allow-run build.ts",
@@ -11,7 +11,5 @@
     "fmt": "deno fmt src/ tests/",
     "lint": "deno lint src/ tests/"
   },
-  "imports": {
-    "yjs": "https://esm.sh/yjs@13.6.0"
-  }
+  "imports": {}
 }

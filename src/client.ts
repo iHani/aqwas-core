@@ -1,12 +1,13 @@
-import * as Y from "yjs";
 import { AqwasConnection } from "./connection.ts";
 import { AqwasStore } from "./store.ts";
 import type {
   AqwasClientConfig,
   ClientEvent,
   ConnectionState,
+  DeleteMessage,
   EventCallback,
   ServerMessage,
+  SetMessage,
 } from "./types.ts";
 
 export class AqwasClient {
@@ -14,10 +15,9 @@ export class AqwasClient {
   private store: AqwasStore;
   private conn: AqwasConnection;
 
-  private pendingUpdates: Uint8Array[] = [];
+  private pendingMessages: Array<SetMessage | DeleteMessage> = [];
   private listeners = new Map<ClientEvent, Set<EventCallback<ClientEvent>>>();
 
-  // Resolves when first sync-state is received
   private syncResolve: (() => void) | null = null;
   private syncPromise: Promise<void>;
 
@@ -35,7 +35,6 @@ export class AqwasClient {
       onClose: (code, reason) => this.handleClose(code, reason),
     });
 
-    // Wire store observations → client "change" events
     this.store.onObserve((key, value, oldValue) => {
       this.emit("change", key, value, oldValue);
     });
@@ -64,13 +63,24 @@ export class AqwasClient {
 
   set(key: string, value: unknown): void {
     if (this.config.exclude?.includes(key)) return;
-    const update = this.store.set(key, value);
-    this.sendOrBuffer(update);
+    this.store.set(key, value);
+    const msg: SetMessage = {
+      type: "set",
+      storeId: this.config.storeId,
+      key,
+      value,
+    };
+    this.sendOrBuffer(msg);
   }
 
   delete(key: string): void {
-    const update = this.store.delete(key);
-    this.sendOrBuffer(update);
+    this.store.delete(key);
+    const msg: DeleteMessage = {
+      type: "delete",
+      storeId: this.config.storeId,
+      key,
+    };
+    this.sendOrBuffer(msg);
   }
 
   getAll(): Record<string, unknown> {
@@ -103,7 +113,6 @@ export class AqwasClient {
     if (this.config.ttl !== undefined) msg.ttl = this.config.ttl;
     if (this.config.persist !== undefined) msg.persist = this.config.persist;
     if (this.config.token !== undefined) msg.token = this.config.token;
-
     this.conn.send(JSON.stringify(msg));
   }
 
@@ -116,15 +125,12 @@ export class AqwasClient {
     }
 
     switch (msg.type) {
-      case "sync-state": {
-        // Apply full state snapshot
-        const update = new Uint8Array(msg.state);
-        this.store.applyRemoteUpdate(update);
+      case "sync": {
+        this.store.applySync(msg.state);
         this.conn.markConnected();
         this.emit("connect");
         this.emit("sync", this.store.getAll());
-        this.flushPendingUpdates();
-
+        this.flushPending();
         if (this.syncResolve) {
           this.syncResolve();
           this.syncResolve = null;
@@ -132,16 +138,23 @@ export class AqwasClient {
         break;
       }
 
-      case "state": {
-        const update = new Uint8Array(msg.update);
-        this.store.applyRemoteUpdate(update);
+      case "set": {
+        this.store.applyRemoteSet(msg.key, msg.value);
+        break;
+      }
+
+      case "delete": {
+        this.store.applyRemoteDelete(msg.key);
         break;
       }
 
       case "error": {
         if (msg.code === "WRITE_DENIED") {
-          this.store.rollback();
-          this.pendingUpdates = [];
+          // Request full state from server to restore authoritative state
+          this.conn.send(
+            JSON.stringify({ type: "sync", storeId: this.config.storeId }),
+          );
+          this.pendingMessages = [];
         }
         this.emit("error", msg.code, msg.message);
         break;
@@ -161,34 +174,24 @@ export class AqwasClient {
   private handleClose(_code: number, _reason: string): void {
     this.emit("disconnect");
 
-    // Reset sync promise for next reconnect
     let resolveFn!: () => void;
     this.syncPromise = new Promise<void>((r) => (resolveFn = r));
     this.syncResolve = resolveFn;
   }
 
-  private sendOrBuffer(update: Uint8Array): void {
+  private sendOrBuffer(msg: SetMessage | DeleteMessage): void {
     if (this.conn.state === "connected") {
-      this.sendUpdate(update);
+      this.conn.send(JSON.stringify(msg));
     } else {
-      this.pendingUpdates.push(update);
+      this.pendingMessages.push(msg);
     }
   }
 
-  private sendUpdate(update: Uint8Array): void {
-    const msg = {
-      type: "update",
-      storeId: this.config.storeId,
-      update: Array.from(update),
-    };
-    this.conn.send(JSON.stringify(msg));
-  }
-
-  private flushPendingUpdates(): void {
-    if (this.pendingUpdates.length === 0) return;
-    const merged = Y.mergeUpdates(this.pendingUpdates);
-    this.pendingUpdates = [];
-    this.sendUpdate(merged);
+  private flushPending(): void {
+    for (const msg of this.pendingMessages) {
+      this.conn.send(JSON.stringify(msg));
+    }
+    this.pendingMessages = [];
   }
 
   private emit<E extends ClientEvent>(

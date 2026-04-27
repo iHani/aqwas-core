@@ -1,8 +1,4 @@
-import {
-  assertEquals,
-  assertNotEquals,
-} from "https://deno.land/std@0.220.0/assert/mod.ts";
-import * as Y from "yjs";
+import { assertEquals } from "https://deno.land/std@0.220.0/assert/mod.ts";
 import { AqwasStore } from "../src/store.ts";
 
 Deno.test("Store: get/set/delete basic ops", () => {
@@ -31,57 +27,49 @@ Deno.test("Store: getAll returns plain object", () => {
   store.destroy();
 });
 
-Deno.test("Store: applyLocalTransaction returns binary update", () => {
+Deno.test("Store: applyRemoteSet merges into state", () => {
   const store = new AqwasStore();
-  const update = store.set("x", 42);
+  store.applyRemoteSet("x", 42);
+  assertEquals(store.get("x"), 42);
+  store.destroy();
+});
 
-  assertEquals(update instanceof Uint8Array, true);
-  assertNotEquals(update.length, 0);
+Deno.test("Store: applyRemoteDelete removes key", () => {
+  const store = new AqwasStore();
+  store.set("x", 42);
+  store.applyRemoteDelete("x");
+  assertEquals(store.get("x"), undefined);
+  store.destroy();
+});
 
-  // Apply to a fresh doc and verify convergence
-  const other = new Y.Doc();
-  Y.applyUpdate(other, update);
-  assertEquals(other.getMap("state").get("x"), 42);
+Deno.test("Store: applySync replaces full state and fires observers", () => {
+  const store = new AqwasStore();
+  store.set("old", 1);
+
+  const changes: Array<{ key: string; value: unknown; oldValue: unknown }> = [];
+  store.onObserve((key, value, oldValue) =>
+    changes.push({ key, value, oldValue })
+  );
+
+  store.applySync({ a: 10, b: 20 });
+
+  assertEquals(store.get("a"), 10);
+  assertEquals(store.get("b"), 20);
+  assertEquals(store.get("old"), undefined);
+
+  // Observer fired for changed keys
+  const keys = changes.map((c) => c.key).sort();
+  assertEquals(keys, ["a", "b", "old"]);
 
   store.destroy();
-  other.destroy();
 });
 
-Deno.test("Store: applyRemoteUpdate merges correctly", () => {
-  const store1 = new AqwasStore();
-  const store2 = new AqwasStore();
-
-  const update1 = store1.set("a", 1);
-  const update2 = store2.set("b", 2);
-
-  store1.applyRemoteUpdate(update2);
-  store2.applyRemoteUpdate(update1);
-
-  assertEquals(store1.get("a"), 1);
-  assertEquals(store1.get("b"), 2);
-  assertEquals(store2.get("a"), 1);
-  assertEquals(store2.get("b"), 2);
-
-  store1.destroy();
-  store2.destroy();
-});
-
-Deno.test("Store: CRDT convergence on concurrent same-key set", () => {
-  const store1 = new AqwasStore();
-  const store2 = new AqwasStore();
-
-  // Both set same key concurrently
-  const u1 = store1.set("key", "from-store1");
-  const u2 = store2.set("key", "from-store2");
-
-  store1.applyRemoteUpdate(u2);
-  store2.applyRemoteUpdate(u1);
-
-  // Both converge to the same value (CRDT last-write-wins by client ID)
-  assertEquals(store1.get("key"), store2.get("key"));
-
-  store1.destroy();
-  store2.destroy();
+Deno.test("Store: LWW — last applyRemoteSet wins", () => {
+  const store = new AqwasStore();
+  store.applyRemoteSet("key", "first");
+  store.applyRemoteSet("key", "second");
+  assertEquals(store.get("key"), "second");
+  store.destroy();
 });
 
 Deno.test("Store: onObserve fires on local set", () => {
@@ -97,21 +85,17 @@ Deno.test("Store: onObserve fires on local set", () => {
   store.destroy();
 });
 
-Deno.test("Store: onObserve fires on remote update", () => {
-  const store1 = new AqwasStore();
-  const store2 = new AqwasStore();
-
+Deno.test("Store: onObserve fires on applyRemoteSet", () => {
+  const store = new AqwasStore();
   const events: Array<{ key: string; value: unknown }> = [];
-  store2.onObserve((key, value) => events.push({ key, value }));
 
-  const update = store1.set("msg", "hello");
-  store2.applyRemoteUpdate(update);
+  store.onObserve((key, value) => events.push({ key, value }));
+  store.applyRemoteSet("msg", "hello");
 
   assertEquals(events.length, 1);
   assertEquals(events[0], { key: "msg", value: "hello" });
 
-  store1.destroy();
-  store2.destroy();
+  store.destroy();
 });
 
 Deno.test("Store: onObserve unsubscribe stops callbacks", () => {
@@ -129,18 +113,16 @@ Deno.test("Store: onObserve unsubscribe stops callbacks", () => {
   store.destroy();
 });
 
-Deno.test("Store: encodeStateAsUpdate round-trips", () => {
+Deno.test("Store: getAll returns a copy (not live reference)", () => {
   const store = new AqwasStore();
   store.set("x", 1);
   store.set("y", 2);
 
-  const snapshot = store.encodeStateAsUpdate();
+  const snapshot = store.getAll();
+  store.set("z", 3);
 
-  const fresh = new AqwasStore();
-  fresh.applyRemoteUpdate(snapshot);
-
-  assertEquals(fresh.getAll(), { x: 1, y: 2 });
+  assertEquals(snapshot, { x: 1, y: 2 });
+  assertEquals(store.getAll(), { x: 1, y: 2, z: 3 });
 
   store.destroy();
-  fresh.destroy();
 });
